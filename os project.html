@@ -1,0 +1,2254 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>C1 — Priority vs SRTF Scheduling</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ─────────────────────────────────────
+       CSS VARIABLES
+    ───────────────────────────────────── */
+      :root {
+        --bg: #f4f6fb;
+        --white: #ffffff;
+        --card-bg: #f8f9fd;
+        --border: #e4e8f5;
+        --border-dk: #d0d6ef;
+
+        /* Priority = blue */
+        --blue: #4f6ef7;
+        --blue-lt: #eef1fe;
+        --blue-md: #c7d1fb;
+
+        /* SRTF = teal */
+        --teal: #0891b2;
+        --teal-lt: #e0f2fe;
+        --teal-md: #7dd3fc;
+
+        --green: #16a34a;
+        --green-lt: #dcfce7;
+        --green-md: #86efac;
+
+        --red: #dc2626;
+        --red-lt: #fee2e2;
+        --red-md: #fca5a5;
+
+        --yellow: #d97706;
+        --yel-lt: #fef3c7;
+        --yel-md: #fde68a;
+
+        --text: #1e2235;
+        --text2: #374151;
+        --sub: #6b7280;
+        --dim: #9ca3af;
+
+        --mono: "JetBrains Mono", monospace;
+        --sans: "Inter", sans-serif;
+        --radius: 12px;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.07), 0 4px 16px rgba(0, 0, 0, 0.04);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 14px;
+        line-height: 1.65;
+      }
+
+      /* ─────────────────────────────────────
+       PAGE HEADER
+    ───────────────────────────────────── */
+      .page-header {
+        background: var(--white);
+        border-bottom: 1px solid var(--border);
+        padding: 30px 32px 26px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+      }
+
+      .page-header h1 {
+        font-size: 1.75rem;
+        font-weight: 900;
+        margin-bottom: 6px;
+      }
+
+      .h-pri {
+        color: var(--blue);
+      }
+      .h-vs {
+        color: var(--sub);
+        font-weight: 300;
+        margin: 0 8px;
+      }
+      .h-srtf {
+        color: var(--teal);
+      }
+
+      .page-header p {
+        font-size: 13px;
+        color: var(--sub);
+        margin-bottom: 10px;
+      }
+
+      /* Two info pills */
+      .header-pills {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .hpill {
+        font-size: 11px;
+        font-weight: 600;
+        font-family: var(--mono);
+        padding: 4px 12px;
+        border-radius: 20px;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        color: var(--sub);
+      }
+
+      .hpill.blue {
+        background: var(--blue-lt);
+        border-color: var(--blue-md);
+        color: var(--blue);
+      }
+      .hpill.teal {
+        background: var(--teal-lt);
+        border-color: var(--teal-md);
+        color: var(--teal);
+      }
+
+      /* ─────────────────────────────────────
+       MAIN WRAPPER
+    ───────────────────────────────────── */
+      .wrap {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 28px 20px 80px;
+      }
+
+      /* ─────────────────────────────────────
+       SECTION DIVIDER
+    ───────────────────────────────────── */
+      .sec {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 32px 0 14px;
+      }
+
+      .sec h2 {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--sub);
+        white-space: nowrap;
+      }
+
+      .sec .line {
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+
+      /* ─────────────────────────────────────
+       CARD
+    ───────────────────────────────────── */
+      .card {
+        background: var(--white);
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius);
+        padding: 22px;
+        margin-bottom: 14px;
+        box-shadow: var(--shadow);
+      }
+
+      /* Card label — small header inside each card */
+      .card-lbl {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        color: var(--sub);
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* Colored accent bar before the label */
+      .card-lbl::before {
+        content: "";
+        display: block;
+        width: 3px;
+        height: 13px;
+        border-radius: 2px;
+        background: var(--blue);
+        flex-shrink: 0;
+      }
+
+      .card-lbl.teal::before {
+        background: var(--teal);
+      }
+      .card-lbl.green::before {
+        background: var(--green);
+      }
+
+      /* ─────────────────────────────────────
+       RULE NOTE (yellow info box)
+    ───────────────────────────────────── */
+      .rule-note {
+        background: var(--yel-lt);
+        border: 1px solid var(--yel-md);
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: 12.5px;
+        color: #92400e;
+        line-height: 1.85;
+        margin-bottom: 20px;
+      }
+
+      .rule-note strong {
+        font-weight: 700;
+        color: #78350f;
+      }
+
+      /* ─────────────────────────────────────
+       FORM FIELDS
+    ───────────────────────────────────── */
+      .fields-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 11px;
+        margin-bottom: 12px;
+      }
+
+      .field-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text2);
+      }
+
+      input[type="text"],
+      input[type="number"] {
+        background: var(--white);
+        border: 1.5px solid var(--border-dk);
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 13px;
+        padding: 9px 12px;
+        border-radius: 8px;
+        outline: none;
+        width: 100%;
+        transition:
+          border-color 0.18s,
+          box-shadow 0.18s;
+      }
+
+      input:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px rgba(79, 110, 247, 0.12);
+      }
+
+      /* Red state when input fails validation */
+      input.has-error {
+        border-color: var(--red) !important;
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.08) !important;
+      }
+
+      /* Error message shown below each invalid input */
+      .err-msg {
+        font-size: 10px;
+        color: var(--red);
+        min-height: 14px;
+        font-family: var(--mono);
+      }
+
+      /* ─────────────────────────────────────
+       BUTTONS
+    ───────────────────────────────────── */
+      .btn-add {
+        background: var(--blue);
+        color: white;
+        font-family: var(--sans);
+        font-weight: 700;
+        font-size: 12px;
+        padding: 9px 18px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(79, 110, 247, 0.3);
+        transition: all 0.15s;
+      }
+      .btn-add:hover {
+        background: #3d5cf5;
+        transform: translateY(-1px);
+      }
+
+      .btn-del {
+        background: transparent;
+        border: 1.5px solid var(--border-dk);
+        color: var(--sub);
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.13s;
+      }
+      .btn-del:hover {
+        border-color: var(--red);
+        color: var(--red);
+      }
+
+      .btn-sc {
+        background: var(--white);
+        border: 1.5px solid var(--border-dk);
+        color: var(--text2);
+        font-size: 11px;
+        font-weight: 600;
+        padding: 7px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.15s;
+        font-family: var(--sans);
+      }
+      .btn-sc:hover {
+        border-color: var(--blue);
+        color: var(--blue);
+      }
+      .btn-sc.active {
+        border-color: var(--blue);
+        color: var(--blue);
+        background: var(--blue-lt);
+      }
+
+      .btn-clear {
+        background: transparent;
+        border: 1.5px solid var(--border-dk);
+        color: var(--sub);
+        font-size: 11px;
+        font-weight: 600;
+        padding: 7px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-family: var(--sans);
+        transition: all 0.13s;
+      }
+      .btn-clear:hover {
+        border-color: var(--red);
+        color: var(--red);
+      }
+
+      .btn-run {
+        display: block;
+        width: 100%;
+        background: linear-gradient(135deg, var(--blue), #3d5cf5);
+        color: white;
+        font-family: var(--sans);
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.7px;
+        text-transform: uppercase;
+        padding: 16px;
+        border-radius: var(--radius);
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 4px 20px rgba(79, 110, 247, 0.35);
+        transition: all 0.2s;
+        margin-top: 4px;
+      }
+      .btn-run:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 32px rgba(79, 110, 247, 0.45);
+      }
+
+      /* ─────────────────────────────────────
+       PROCESS TABLE
+    ───────────────────────────────────── */
+      .proc-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      .proc-table th {
+        padding: 9px 14px;
+        background: var(--card-bg);
+        color: var(--sub);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border-bottom: 2px solid var(--border);
+        text-align: left;
+      }
+
+      .proc-table td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text2);
+      }
+
+      .proc-table tr:last-child td {
+        border-bottom: none;
+      }
+      .proc-table tr:hover td {
+        background: var(--card-bg);
+      }
+
+      .dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 7px;
+        vertical-align: middle;
+      }
+
+      .empty-state {
+        text-align: center;
+        color: var(--dim);
+        font-size: 13px;
+        padding: 32px;
+        background: var(--card-bg);
+        border-radius: 8px;
+      }
+
+      /* ─────────────────────────────────────
+       SCENARIO BAR
+    ───────────────────────────────────── */
+      .sc-bar {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+
+      .sc-info {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 11px 14px;
+        font-size: 12px;
+        color: var(--sub);
+        line-height: 1.7;
+        min-height: 36px;
+      }
+
+      .sc-info strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      /* Validation demo — only visible for Scenario D */
+      .val-demo {
+        margin-top: 12px;
+        background: #fff9f9;
+        border: 1.5px solid #fecaca;
+        border-radius: 8px;
+        padding: 14px 16px;
+      }
+
+      .val-demo-title {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--red);
+        margin-bottom: 10px;
+      }
+
+      .val-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-bottom: 5px;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .val-row:last-child {
+        margin-bottom: 0;
+      }
+      .val-x {
+        color: var(--red);
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+      .val-ok {
+        color: var(--green);
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+      .val-f {
+        color: var(--blue);
+        font-weight: 700;
+        min-width: 120px;
+        flex-shrink: 0;
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+      .val-m {
+        color: var(--red);
+      }
+
+      /* ─────────────────────────────────────
+       GANTT CHART
+    ───────────────────────────────────── */
+      .gantt-scroll {
+        overflow-x: auto;
+        padding-bottom: 22px;
+      }
+
+      .gantt-track {
+        display: flex;
+        height: 46px;
+        min-width: max-content;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1.5px solid var(--border);
+      }
+
+      .g-block {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.9);
+        min-width: 6px;
+        border-left: 1px solid rgba(255, 255, 255, 0.18);
+        cursor: default;
+        transition: filter 0.12s;
+      }
+
+      .g-block:first-child {
+        border-left: none;
+      }
+      .g-block:hover {
+        filter: brightness(1.1);
+      }
+
+      .g-block.idle {
+        background: #f3f4f6;
+        color: var(--dim);
+        border-left: 1px solid var(--border);
+      }
+
+      .gantt-axis {
+        position: relative;
+        min-width: max-content;
+        height: 20px;
+        margin-top: 3px;
+      }
+
+      .g-tick {
+        font-family: var(--mono);
+        font-size: 9px;
+        color: var(--dim);
+        position: absolute;
+        transform: translateX(-50%);
+      }
+
+      .g-tick::before {
+        content: "";
+        display: block;
+        width: 1px;
+        height: 4px;
+        background: var(--border);
+        margin: 0 auto 2px;
+      }
+
+      /* ─────────────────────────────────────
+       RESULTS TABLE
+    ───────────────────────────────────── */
+      .res-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      .res-table th {
+        padding: 9px 12px;
+        background: var(--card-bg);
+        color: var(--sub);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border-bottom: 2px solid var(--border);
+        text-align: center;
+      }
+
+      .res-table th:first-child {
+        text-align: left;
+      }
+
+      .res-table td {
+        padding: 9px 12px;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+        color: var(--text2);
+      }
+
+      .res-table td:first-child {
+        text-align: left;
+        font-weight: 600;
+      }
+      .res-table tr:hover td {
+        background: var(--card-bg);
+      }
+
+      /* Blue average row for Priority */
+      .res-table .avg-row td {
+        background: var(--blue-lt);
+        border-top: 2px solid var(--blue-md);
+        border-bottom: none;
+        font-weight: 700;
+        color: var(--blue);
+      }
+
+      /* Teal average row for SRTF */
+      .res-table .avg-row.srtf td {
+        background: var(--teal-lt);
+        border-top-color: var(--teal-md);
+        color: var(--teal);
+      }
+
+      /* ─────────────────────────────────────
+       COMPARISON SUMMARY
+    ───────────────────────────────────── */
+      .metric-cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+
+      @media (max-width: 560px) {
+        .metric-cards {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .m-card {
+        background: var(--card-bg);
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        padding: 16px;
+      }
+
+      .m-lbl {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--sub);
+        margin-bottom: 10px;
+      }
+
+      .m-vals {
+        display: flex;
+        gap: 20px;
+      }
+      .m-val {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .m-name {
+        font-size: 10px;
+        font-weight: 600;
+        font-family: var(--mono);
+      }
+      .m-num {
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1;
+      }
+
+      .m-num.win {
+        color: var(--green);
+      }
+      .m-num.lose {
+        color: var(--dim);
+      }
+      .m-num.tie {
+        color: var(--blue);
+      }
+
+      .cmp-row {
+        display: grid;
+        grid-template-columns: 1fr 130px 1fr;
+        gap: 8px;
+        align-items: center;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .cmp-row:last-child {
+        border-bottom: none;
+      }
+
+      .cmp-lbl {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: var(--sub);
+        text-align: center;
+        line-height: 1.4;
+      }
+
+      .chip {
+        font-size: 11px;
+        font-weight: 600;
+        font-family: var(--mono);
+        padding: 6px 10px;
+        border-radius: 7px;
+        text-align: center;
+        line-height: 1.3;
+      }
+
+      .chip.win {
+        background: var(--green-lt);
+        border: 1.5px solid var(--green-md);
+        color: var(--green);
+      }
+      .chip.lose {
+        background: var(--card-bg);
+        border: 1.5px solid var(--border);
+        color: var(--sub);
+      }
+      .chip.info {
+        background: var(--blue-lt);
+        border: 1.5px solid var(--blue-md);
+        color: var(--blue);
+      }
+      .chip.warn {
+        background: var(--yel-lt);
+        border: 1.5px solid var(--yel-md);
+        color: var(--yellow);
+      }
+      .chip.teal {
+        background: var(--teal-lt);
+        border: 1.5px solid var(--teal-md);
+        color: var(--teal);
+      }
+
+      /* ─────────────────────────────────────
+       ANALYSIS Q&A
+    ───────────────────────────────────── */
+      .qa-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .qa-item {
+        background: var(--card-bg);
+        border: 1.5px solid var(--border);
+        border-radius: 9px;
+        padding: 14px 16px;
+        border-right: 3px solid var(--blue);
+      }
+
+      .qa-q {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--blue);
+        margin-bottom: 5px;
+      }
+
+      .qa-a {
+        font-size: 13px;
+        color: var(--text2);
+        line-height: 1.85;
+      }
+
+      /* ─────────────────────────────────────
+       CONCLUSION
+    ───────────────────────────────────── */
+      .conclusion {
+        background: var(--card-bg);
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        padding: 22px;
+        border-right: 3px solid var(--green);
+      }
+
+      .conc-pt {
+        margin-bottom: 18px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .conc-pt:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+      }
+
+      .conc-lbl {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--green);
+        margin-bottom: 6px;
+      }
+
+      .conc-txt {
+        font-size: 13px;
+        line-height: 1.85;
+        color: var(--text2);
+      }
+      .conc-txt strong {
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      /* Hide results until simulation runs */
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ══════════════════════════════════════════════
+       PAGE HEADER
+  ══════════════════════════════════════════════ -->
+    <div class="page-header">
+      <h1>
+        <span class="h-pri">Priority Scheduling</span>
+        <span class="h-vs">vs</span>
+        <span class="h-srtf">SRTF</span>
+      </h1>
+      <p>CS 241 — Operating Systems · Project C1 · CPU Scheduling Simulator</p>
+      <div class="header-pills">
+        <span class="hpill blue"
+          >Priority: lower number = higher priority · Preemptive · Tie-break:
+          arrival → ID</span
+        >
+        <span class="hpill teal"
+          >SRTF: shortest remaining time first · Preemptive · Tie-break: arrival
+          → ID</span
+        >
+      </div>
+    </div>
+
+    <div class="wrap">
+      <!-- ════════════════════════════════════════════
+         REQUIRED SECTION 1: INPUT PANEL
+         Accepts: Process ID, Arrival Time, Burst Time, Priority Value
+         (C1 handout — no Time Quantum needed)
+    ════════════════════════════════════════════ -->
+      <div class="sec">
+        <h2>Input Panel</h2>
+        <div class="line"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-lbl">Algorithm Rules</div>
+
+        <!-- Documented priority rule and tie-breaking rule — required by handout -->
+        <div class="rule-note">
+          <strong>Priority Scheduling (Preemptive):</strong>
+          The CPU always runs the available process with the lowest priority
+          number (1 = most urgent). A running process is interrupted immediately
+          when a higher-priority process arrives. Tie-break: earliest arrival
+          time first; if still tied, alphabetical Process ID.<br /><br />
+          <strong
+            >SRTF — Shortest Remaining Time First (Preemptive SJF):</strong
+          >
+          The CPU always runs the available process with the shortest remaining
+          burst time. A running process is preempted immediately when a newly
+          arrived process has a shorter remaining time. Tie-break: earliest
+          arrival time first; if still tied, alphabetical Process ID.
+        </div>
+
+        <div class="card-lbl">Add New Process</div>
+
+        <!-- The 4 required fields for C1: PID, Arrival, Burst, Priority -->
+        <div class="fields-grid">
+          <div class="field-wrap">
+            <label>Process ID</label>
+            <input type="text" id="inp-pid" placeholder="P1" maxlength="8" />
+            <div class="err-msg" id="err-pid"></div>
+          </div>
+
+          <div class="field-wrap">
+            <label>Arrival Time ≥ 0</label>
+            <input type="number" id="inp-arrival" placeholder="0" min="0" />
+            <div class="err-msg" id="err-arrival"></div>
+          </div>
+
+          <div class="field-wrap">
+            <label>Burst Time ≥ 1</label>
+            <input type="number" id="inp-burst" placeholder="5" min="1" />
+            <div class="err-msg" id="err-burst"></div>
+          </div>
+
+          <div class="field-wrap">
+            <label>Priority Value (1 = highest)</label>
+            <input type="number" id="inp-priority" placeholder="1" min="1" />
+            <div class="err-msg" id="err-priority"></div>
+          </div>
+
+          <div
+            class="field-wrap"
+            style="justify-content: flex-end; padding-bottom: 18px"
+          >
+            <button class="btn-add" onclick="addProcess()">
+              + Add Process
+            </button>
+          </div>
+        </div>
+
+        <!-- General error shown here (e.g. duplicate ID) -->
+        <div
+          class="err-msg"
+          id="err-general"
+          style="font-size: 11px; margin-bottom: 4px"
+        ></div>
+      </div>
+
+      <!-- ════════════════════════════════════════════
+         TEST SCENARIOS — A, B, C, D (required by C1 handout)
+         A: Basic mixed workload
+         B: Conflict between priority and burst time
+         C: Starvation-sensitive case
+         D: Validation case
+    ════════════════════════════════════════════ -->
+      <div class="sec">
+        <h2>Test Scenarios</h2>
+        <div class="line"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-lbl">Scenarios A · B · C · D</div>
+
+        <div class="sc-bar">
+          <button class="btn-sc" id="sc-A" onclick="loadScenario('A')">
+            Scenario A — Basic Mixed
+          </button>
+          <button class="btn-sc" id="sc-B" onclick="loadScenario('B')">
+            Scenario B — Priority vs Burst Conflict
+          </button>
+          <button class="btn-sc" id="sc-C" onclick="loadScenario('C')">
+            Scenario C — Starvation Risk
+          </button>
+          <button class="btn-sc" id="sc-D" onclick="loadScenario('D')">
+            Scenario D — Validation
+          </button>
+          <button class="btn-clear" onclick="clearAll()">✕ Clear All</button>
+        </div>
+
+        <div class="sc-info" id="sc-info">
+          Select a scenario above or add processes manually using the Input
+          Panel.
+        </div>
+
+        <!-- Validation demo — required by handout Scenario D -->
+        <div class="val-demo hidden" id="val-demo">
+          <div class="val-demo-title">
+            ⚠ Scenario D — Validation: These Inputs Are Safely Rejected
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span
+            ><span class="val-f">Process ID (empty):</span><span>(blank)</span
+            ><span class="val-m"> → Required — cannot be empty</span>
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span><span class="val-f">Arrival Time:</span
+            ><span>-3</span
+            ><span class="val-m">
+              → Negative arrival not allowed — must be ≥ 0</span
+            >
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span><span class="val-f">Burst Time:</span
+            ><span>0</span
+            ><span class="val-m"> → Zero burst not allowed — must be ≥ 1</span>
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span
+            ><span class="val-f">Priority Value:</span><span>-1</span
+            ><span class="val-m">
+              → Negative priority not allowed — must be ≥ 1</span
+            >
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span><span class="val-f">Duplicate ID:</span
+            ><span>P1 (already exists)</span
+            ><span class="val-m"> → Duplicate Process ID not allowed</span>
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span><span class="val-f">Non-numeric:</span
+            ><span>"abc" in Burst</span
+            ><span class="val-m"> → Must be a number</span>
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span><span class="val-f">Missing field:</span
+            ><span>(all blank)</span
+            ><span class="val-m"> → All fields are required</span>
+          </div>
+          <div class="val-row" style="margin-top: 8px">
+            <span class="val-ok">✓</span>
+            <span style="color: var(--green); font-weight: 600">
+              All invalid inputs are rejected. Valid workload loaded —
+              simulation can proceed.</span
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════════════════
+         REQUIRED SECTION 2: PROCESS TABLE
+         Shows same workload used for both algorithms
+    ════════════════════════════════════════════ -->
+      <div class="sec">
+        <h2>Process Table</h2>
+        <div class="line"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-lbl">
+          Current Process Set — same workload used for both algorithms
+        </div>
+        <div id="process-table">
+          <div class="empty-state">
+            No processes yet. Add processes above or load a scenario.
+          </div>
+        </div>
+      </div>
+
+      <!-- RUN BUTTON — triggers both algorithms on same workload -->
+      <button class="btn-run" onclick="runSimulation()">
+        ▶ Run Simulation — Priority Scheduling &amp; SRTF
+      </button>
+
+      <!-- ════════════════════════════════════════════
+         ALL RESULTS — hidden until simulation runs
+    ════════════════════════════════════════════ -->
+      <div id="results" class="hidden">
+        <!-- ──────────────────────────────────────────
+           REQUIRED SECTION 3: GANTT CHART FOR PRIORITY
+      ────────────────────────────────────────── -->
+        <div class="sec">
+          <h2>Gantt Chart for Priority</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl">
+            Priority Scheduling — Preemptive — lower number = higher priority
+          </div>
+          <div class="gantt-scroll">
+            <div class="gantt-track" id="gantt-pri"></div>
+            <div class="gantt-axis" id="axis-pri"></div>
+          </div>
+        </div>
+
+        <!-- ──────────────────────────────────────────
+           REQUIRED SECTION 4: RESULTS TABLE FOR PRIORITY
+      ────────────────────────────────────────── -->
+        <div class="sec">
+          <h2>Results Table for Priority</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl">
+            Per-Process WT · TAT · RT + Averages — Priority Scheduling
+          </div>
+          <div id="table-pri"></div>
+        </div>
+
+        <!-- ──────────────────────────────────────────
+           REQUIRED SECTION 5: GANTT CHART FOR SRTF
+      ────────────────────────────────────────── -->
+        <div class="sec">
+          <h2>Gantt Chart for SRTF</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl teal">
+            SRTF — Shortest Remaining Time First — Preemptive SJF
+          </div>
+          <div class="gantt-scroll">
+            <div class="gantt-track" id="gantt-srtf"></div>
+            <div class="gantt-axis" id="axis-srtf"></div>
+          </div>
+        </div>
+
+        <!-- ──────────────────────────────────────────
+           REQUIRED SECTION 6: RESULTS TABLE FOR SRTF
+      ────────────────────────────────────────── -->
+        <div class="sec">
+          <h2>Results Table for SRTF</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl teal">
+            Per-Process WT · TAT · RT + Averages — SRTF
+          </div>
+          <div id="table-srtf"></div>
+        </div>
+
+        <!-- ──────────────────────────────────────────
+           REQUIRED SECTION 7: COMPARISON SUMMARY SECTION
+      ────────────────────────────────────────── -->
+        <div class="sec">
+          <h2>Comparison Summary Section</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl green">
+            Average Metrics — Priority vs SRTF on Same Workload
+          </div>
+          <!-- 3 metric cards: Avg WT, Avg TAT, Avg RT -->
+          <div class="metric-cards" id="metric-cards"></div>
+
+          <div class="card-lbl green" style="margin-top: 8px">
+            Comparison Details — Behavior &amp; Trade-offs
+          </div>
+          <div id="cmp-rows"></div>
+        </div>
+
+        <!-- ──────────────────────────────────────────
+           REQUIRED ANALYSIS QUESTIONS (5 questions)
+      ────────────────────────────────────────── -->
+        <div class="sec">
+          <h2>Analysis Questions</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl">
+            Required Analysis — 5 Questions (C1 Handout)
+          </div>
+          <div class="qa-list" id="qa-list"></div>
+        </div>
+
+        <!-- ──────────────────────────────────────────
+           REQUIRED SECTION 8: FINAL CONCLUSION AREA (4 points)
+      ────────────────────────────────────────── -->
+        <div class="sec">
+          <h2>Final Conclusion Area</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl green">
+            Final Conclusion — 4 Required Points (C1 Handout)
+          </div>
+          <div class="conclusion" id="conclusion"></div>
+        </div>
+      </div>
+      <!-- /results -->
+    </div>
+    <!-- /wrap -->
+
+    <!-- ══════════════════════════════════════════════
+       JAVASCRIPT
+  ══════════════════════════════════════════════ -->
+    <script>
+      /* ──────────────────────────────────────────────
+       COLORS — one per process position
+    ────────────────────────────────────────────── */
+      const COLORS = [
+        "#4f6ef7", // blue
+        "#f07c3a", // orange
+        "#16a34a", // green
+        "#dc2626", // red
+        "#0891b2", // cyan
+        "#7c3aed", // purple
+        "#d97706", // amber
+        "#db2777", // pink
+        "#059669", // emerald
+        "#6b7280", // gray
+      ];
+
+      /* ──────────────────────────────────────────────
+       PRESET SCENARIOS (A, B, C, D)
+       Exactly matching C1 handout descriptions
+    ────────────────────────────────────────────── */
+      const SCENARIOS = {
+        /* Scenario A: Basic mixed workload
+         Multiple processes, different arrival times, different burst times */
+        A: {
+          title: "Scenario A — Basic Mixed Workload",
+          desc: "A normal workload with multiple processes, different arrival times, and different burst times. Tests general scheduling behavior for both Priority and SRTF algorithms.",
+          procs: [
+            { id: "P1", arrival: 0, burst: 8, priority: 3 },
+            { id: "P2", arrival: 1, burst: 4, priority: 1 },
+            { id: "P3", arrival: 2, burst: 9, priority: 2 },
+            { id: "P4", arrival: 3, burst: 5, priority: 4 },
+            { id: "P5", arrival: 4, burst: 3, priority: 2 },
+          ],
+        },
+
+        /* Scenario B: Conflict between priority and burst time
+         High-priority long process vs low-priority short process */
+        B: {
+          title: "Scenario B — Conflict Between Priority and Burst Time",
+          desc: "P1 has high priority (1) but a long burst (12). P2 has low priority (4) but a very short burst (2). Priority Scheduling will run P1 continuously even though it is long. SRTF will immediately preempt P1 when P2 arrives because P2 has a shorter remaining time — even though P2 has lower priority.",
+          procs: [
+            { id: "P1", arrival: 0, burst: 12, priority: 1 },
+            { id: "P2", arrival: 2, burst: 2, priority: 4 },
+            { id: "P3", arrival: 3, burst: 6, priority: 2 },
+            { id: "P4", arrival: 5, burst: 4, priority: 3 },
+          ],
+        },
+
+        /* Scenario C: Starvation-sensitive case
+         One process may wait much longer depending on the algorithm */
+        C: {
+          title: "Scenario C — Starvation-Sensitive Case",
+          desc: "P4 has the lowest priority (5) and may wait a long time under Priority Scheduling because higher-priority processes keep arriving. Under SRTF, P4 also risks long waits because its burst (8) is much longer than the other processes, and shorter jobs keep arriving and preempting it. Shows how each policy creates starvation risk for different types of processes.",
+          procs: [
+            { id: "P1", arrival: 0, burst: 4, priority: 1 },
+            { id: "P2", arrival: 1, burst: 3, priority: 1 },
+            { id: "P3", arrival: 2, burst: 2, priority: 2 },
+            { id: "P4", arrival: 3, burst: 8, priority: 5 },
+            { id: "P5", arrival: 4, burst: 2, priority: 1 },
+          ],
+        },
+
+        /* Scenario D: Validation case
+         Demonstrates safe rejection of invalid inputs */
+        D: {
+          title: "Scenario D — Validation Case",
+          desc: "Demonstrates how the simulator safely rejects all types of invalid input. The panel above lists every invalid case and the exact error message produced. A valid workload is loaded so the simulation can proceed after reviewing the validation behavior.",
+          procs: [
+            { id: "P1", arrival: 0, burst: 6, priority: 2 },
+            { id: "P2", arrival: 1, burst: 4, priority: 1 },
+            { id: "P3", arrival: 2, burst: 5, priority: 3 },
+            { id: "P4", arrival: 3, burst: 3, priority: 1 },
+          ],
+        },
+      };
+
+      /* ──────────────────────────────────────────────
+       GLOBAL STATE
+    ────────────────────────────────────────────── */
+      let processList = []; // all processes added by the user
+
+      /* ──────────────────────────────────────────────
+       VALIDATION
+       Checks one field at a time.
+       Returns true = valid, false = invalid.
+       Shows error message and red border when invalid.
+    ────────────────────────────────────────────── */
+      function validateField(inputId, errorId, value, rules) {
+        const inputEl = document.getElementById(inputId);
+        const errorEl = document.getElementById(errorId);
+
+        // Clear previous error
+        inputEl.classList.remove("has-error");
+        errorEl.textContent = "";
+
+        // Rule: field cannot be empty
+        if (rules.required && value.trim() === "") {
+          inputEl.classList.add("has-error");
+          errorEl.textContent = "Required";
+          return false;
+        }
+
+        // Rule: value must be a real number (not "abc")
+        if (rules.numeric && isNaN(Number(value))) {
+          inputEl.classList.add("has-error");
+          errorEl.textContent = "Must be a number";
+          return false;
+        }
+
+        const num = Number(value);
+
+        // Rule: value must be >= minimum
+        if (rules.min !== undefined && num < rules.min) {
+          inputEl.classList.add("has-error");
+          errorEl.textContent = `Must be ≥ ${rules.min}`;
+          return false;
+        }
+
+        // Rule: value must be <= maximum
+        if (rules.max !== undefined && num > rules.max) {
+          inputEl.classList.add("has-error");
+          errorEl.textContent = `Max: ${rules.max}`;
+          return false;
+        }
+
+        // Rule: only letters and digits allowed (for Process ID)
+        if (rules.alphaNum && !/^[A-Za-z0-9_-]+$/.test(value)) {
+          inputEl.classList.add("has-error");
+          errorEl.textContent = "Letters & digits only";
+          return false;
+        }
+
+        return true; // all checks passed
+      }
+
+      /* ──────────────────────────────────────────────
+       USER ACTIONS
+    ────────────────────────────────────────────── */
+
+      function addProcess() {
+        const pid = document.getElementById("inp-pid").value.trim();
+        const arrival = document.getElementById("inp-arrival").value;
+        const burst = document.getElementById("inp-burst").value;
+        const priority = document.getElementById("inp-priority").value;
+
+        document.getElementById("err-general").textContent = "";
+
+        // Validate all 4 fields — all must pass
+        let valid = true;
+        valid &= validateField("inp-pid", "err-pid", pid, {
+          required: true,
+          alphaNum: true,
+        });
+        valid &= validateField("inp-arrival", "err-arrival", arrival, {
+          required: true,
+          numeric: true,
+          min: 0,
+          max: 9999,
+        });
+        valid &= validateField("inp-burst", "err-burst", burst, {
+          required: true,
+          numeric: true,
+          min: 1,
+          max: 999,
+        });
+        valid &= validateField("inp-priority", "err-priority", priority, {
+          required: true,
+          numeric: true,
+          min: 1,
+          max: 99,
+        });
+        if (!valid) return;
+
+        // Reject duplicate Process ID
+        if (processList.find((p) => p.id === pid)) {
+          document.getElementById("inp-pid").classList.add("has-error");
+          document.getElementById("err-pid").textContent = "Duplicate ID";
+          return;
+        }
+
+        // Cap at 15 processes
+        if (processList.length >= 15) {
+          document.getElementById("err-general").textContent =
+            "Maximum 15 processes.";
+          return;
+        }
+
+        // All valid — add the process
+        processList.push({
+          id: pid,
+          arrival: Number(arrival),
+          burst: Number(burst),
+          priority: Number(priority),
+        });
+
+        renderProcessTable();
+
+        // Clear fields and suggest the next PID
+        document.getElementById("inp-pid").value =
+          "P" + (processList.length + 1);
+        ["inp-arrival", "inp-burst", "inp-priority"].forEach((id) => {
+          document.getElementById(id).value = "";
+        });
+        ["inp-pid", "inp-arrival", "inp-burst", "inp-priority"].forEach(
+          (id) => {
+            document.getElementById(id).classList.remove("has-error");
+          },
+        );
+        ["err-pid", "err-arrival", "err-burst", "err-priority"].forEach(
+          (id) => {
+            document.getElementById(id).textContent = "";
+          },
+        );
+      }
+
+      function removeProcess(index) {
+        processList.splice(index, 1);
+        renderProcessTable();
+      }
+
+      function loadScenario(key) {
+        // Highlight the active button
+        document
+          .querySelectorAll(".btn-sc")
+          .forEach((b) => b.classList.remove("active"));
+        document.getElementById("sc-" + key).classList.add("active");
+
+        const s = SCENARIOS[key];
+
+        document.getElementById("sc-info").innerHTML =
+          `<strong>${s.title}</strong><br>${s.desc}`;
+
+        // Show validation demo only for Scenario D
+        document
+          .getElementById("val-demo")
+          .classList.toggle("hidden", key !== "D");
+
+        // Load the scenario data
+        processList = s.procs.map((p) => ({ ...p }));
+
+        // Hide any previous results
+        document.getElementById("results").classList.add("hidden");
+
+        clearErrors();
+        renderProcessTable();
+      }
+
+      function clearAll() {
+        processList = [];
+        document.getElementById("sc-info").textContent =
+          "Select a scenario above or add processes manually using the Input Panel.";
+        document.getElementById("val-demo").classList.add("hidden");
+        document.getElementById("results").classList.add("hidden");
+        document.getElementById("inp-pid").value = "P1";
+        ["inp-arrival", "inp-burst", "inp-priority"].forEach((id) => {
+          document.getElementById(id).value = "";
+        });
+        document
+          .querySelectorAll(".btn-sc")
+          .forEach((b) => b.classList.remove("active"));
+        clearErrors();
+        renderProcessTable();
+      }
+
+      function clearErrors() {
+        ["inp-pid", "inp-arrival", "inp-burst", "inp-priority"].forEach(
+          (id) => {
+            document.getElementById(id).classList.remove("has-error");
+          },
+        );
+        [
+          "err-pid",
+          "err-arrival",
+          "err-burst",
+          "err-priority",
+          "err-general",
+        ].forEach((id) => {
+          document.getElementById(id).textContent = "";
+        });
+      }
+
+      /* ──────────────────────────────────────────────
+       BUILD COLOR MAP
+       Maps each process ID to a fixed color.
+    ────────────────────────────────────────────── */
+      function buildColorMap() {
+        const map = {};
+        processList.forEach((p, i) => {
+          map[p.id] = COLORS[i % COLORS.length];
+        });
+        return map;
+      }
+
+      /* ──────────────────────────────────────────────
+       RENDER PROCESS TABLE
+       Builds the HTML table and injects it into the page.
+    ────────────────────────────────────────────── */
+      function renderProcessTable() {
+        const container = document.getElementById("process-table");
+
+        if (processList.length === 0) {
+          container.innerHTML =
+            '<div class="empty-state">No processes yet. Add processes above or load a scenario.</div>';
+          return;
+        }
+
+        let html = `
+        <table class="proc-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Process ID</th>
+              <th>Arrival Time</th>
+              <th>Burst Time</th>
+              <th>Priority</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+        processList.forEach((p, i) => {
+          const color = COLORS[i % COLORS.length];
+          html += `
+          <tr>
+            <td><span class="dot" style="background:${color};"></span></td>
+            <td><strong>${p.id}</strong></td>
+            <td>${p.arrival}</td>
+            <td>${p.burst}</td>
+            <td>${p.priority}</td>
+            <td><button class="btn-del" onclick="removeProcess(${i})">✕</button></td>
+          </tr>
+        `;
+        });
+
+        html += "</tbody></table>";
+        container.innerHTML = html;
+      }
+
+      /* ══════════════════════════════════════════════
+       PRIORITY SCHEDULING ALGORITHM — PREEMPTIVE
+       Rule: lowest priority number = most urgent
+       Tie-break: earliest arrival → alphabetical ID
+       Preemption: immediately when a higher-priority process arrives
+    ══════════════════════════════════════════════ */
+      function runPriority(inputProcesses) {
+        // Copy processes — add tracking fields
+        const processes = inputProcesses.map((p) => ({
+          ...p,
+          remaining: p.burst, // counts down as CPU runs
+          firstRun: -1, // time of first CPU access (for RT)
+          endTime: -1, // completion time (for CT/TAT)
+        }));
+
+        let clock = 0;
+        let ganttSegments = []; // records {pid, start, end} for each execution block
+        let done = 0;
+
+        while (done < processes.length) {
+          // Find all processes that have arrived and still have work left
+          const available = processes.filter(
+            (p) => p.arrival <= clock && p.remaining > 0,
+          );
+
+          // If nothing is available, jump clock to the next arrival
+          if (available.length === 0) {
+            const next = processes
+              .filter((p) => p.remaining > 0)
+              .sort((a, b) => a.arrival - b.arrival)[0];
+            clock = next.arrival;
+            continue;
+          }
+
+          // Pick the process with the lowest priority number
+          // Tie-break 1: earliest arrival  Tie-break 2: alphabetical ID
+          available.sort(
+            (a, b) =>
+              a.priority - b.priority ||
+              a.arrival - b.arrival ||
+              a.id.localeCompare(b.id),
+          );
+
+          const winner = available[0];
+
+          // Record first CPU access time (used for Response Time)
+          if (winner.firstRun === -1) winner.firstRun = clock;
+
+          // Will a higher-priority process arrive before the winner finishes?
+          // Search for the earliest future arrival with a strictly lower priority number
+          const threat = processes
+            .filter(
+              (p) =>
+                p.arrival > clock && // arrives after now
+                p.remaining > 0 && // has work left
+                p.priority < winner.priority, // strictly higher priority
+            )
+            .sort((a, b) => a.arrival - b.arrival)[0]; // take the earliest one
+
+          const finishAt = clock + winner.remaining;
+          const stopAt = threat ? Math.min(finishAt, threat.arrival) : finishAt;
+
+          ganttSegments.push({ pid: winner.id, start: clock, end: stopAt });
+          winner.remaining -= stopAt - clock;
+          clock = stopAt;
+
+          if (winner.remaining === 0) {
+            winner.endTime = clock;
+            done++;
+          }
+        }
+
+        // Merge consecutive same-PID blocks for a cleaner chart
+        const merged = [];
+        for (const seg of ganttSegments) {
+          const last = merged[merged.length - 1];
+          if (last && last.pid === seg.pid && last.end === seg.start) {
+            last.end = seg.end;
+          } else {
+            merged.push({ ...seg });
+          }
+        }
+
+        return { processes, ganttSegments: merged };
+      }
+
+      /* ══════════════════════════════════════════════
+       SRTF ALGORITHM — SHORTEST REMAINING TIME FIRST
+       (Preemptive version of SJF)
+       Rule: always run the process with the shortest remaining burst
+       Tie-break: earliest arrival → alphabetical ID
+       Preemption: immediately when a shorter-remaining process arrives
+    ══════════════════════════════════════════════ */
+      function runSRTF(inputProcesses) {
+        // Copy processes — add tracking fields
+        const processes = inputProcesses.map((p) => ({
+          ...p,
+          remaining: p.burst,
+          firstRun: -1,
+          endTime: -1,
+        }));
+
+        let clock = 0;
+        let ganttSegments = [];
+        let done = 0;
+
+        while (done < processes.length) {
+          // Find all processes that have arrived and still have remaining work
+          const available = processes.filter(
+            (p) => p.arrival <= clock && p.remaining > 0,
+          );
+
+          // Nothing available — jump to next arrival
+          if (available.length === 0) {
+            const next = processes
+              .filter((p) => p.remaining > 0)
+              .sort((a, b) => a.arrival - b.arrival)[0];
+            clock = next.arrival;
+            continue;
+          }
+
+          // Pick the process with the SHORTEST remaining time
+          // Tie-break 1: earliest arrival  Tie-break 2: alphabetical ID
+          available.sort(
+            (a, b) =>
+              a.remaining - b.remaining ||
+              a.arrival - b.arrival ||
+              a.id.localeCompare(b.id),
+          );
+
+          const winner = available[0];
+
+          // Record first CPU access time
+          if (winner.firstRun === -1) winner.firstRun = clock;
+
+          // Find the earliest future process that would preempt the winner.
+          // A future process P preempts the winner at time P.arrival if:
+          //   P.burst  <  winner.remaining - (P.arrival - clock)
+          // Because at time P.arrival:
+          //   winner's remaining = winner.remaining - (P.arrival - clock)
+          //   P's remaining = P.burst (brand new)
+          // SRTF then picks P because P.burst < winner's remaining at that point.
+
+          let stopAt = clock + winner.remaining; // default: run to completion
+
+          const futureArrivals = processes
+            .filter((p) => p.arrival > clock && p.remaining > 0)
+            .sort((a, b) => a.arrival - b.arrival); // sort ascending by arrival
+
+          for (const future of futureArrivals) {
+            const timeGap = future.arrival - clock;
+            const winnerRemainingThen = winner.remaining - timeGap;
+            // If future process's burst < winner's remaining at that arrival time → preemption
+            if (winnerRemainingThen > 0 && future.burst < winnerRemainingThen) {
+              stopAt = future.arrival; // stop at first preemptor
+              break;
+            }
+          }
+
+          ganttSegments.push({ pid: winner.id, start: clock, end: stopAt });
+          winner.remaining -= stopAt - clock;
+          clock = stopAt;
+
+          if (winner.remaining === 0) {
+            winner.endTime = clock;
+            done++;
+          }
+        }
+
+        // Merge consecutive same-PID segments
+        const merged = [];
+        for (const seg of ganttSegments) {
+          const last = merged[merged.length - 1];
+          if (last && last.pid === seg.pid && last.end === seg.start) {
+            last.end = seg.end;
+          } else {
+            merged.push({ ...seg });
+          }
+        }
+
+        return { processes, ganttSegments: merged };
+      }
+
+      /* ──────────────────────────────────────────────
+       METRICS CALCULATION
+       Formulas from Lecture 5 (Dr. Ahmed):
+         TAT = Completion Time - Arrival Time
+         WT  = TAT - Burst Time
+         RT  = First CPU Time - Arrival Time
+    ────────────────────────────────────────────── */
+      function calcMetrics(processes) {
+        return processes.map((p) => ({
+          id: p.id,
+          arrival: p.arrival,
+          burst: p.burst,
+          priority: p.priority,
+          ct: p.endTime,
+          tat: p.endTime - p.arrival,
+          wt: p.endTime - p.arrival - p.burst,
+          rt: p.firstRun - p.arrival,
+        }));
+      }
+
+      function calcAverages(metrics) {
+        const n = metrics.length;
+        return {
+          wt: +(metrics.reduce((s, m) => s + m.wt, 0) / n).toFixed(2),
+          tat: +(metrics.reduce((s, m) => s + m.tat, 0) / n).toFixed(2),
+          rt: +(metrics.reduce((s, m) => s + m.rt, 0) / n).toFixed(2),
+        };
+      }
+
+      /* ──────────────────────────────────────────────
+       GANTT CHART RENDERING
+       Converts ganttSegments array to colored div blocks.
+       Width of each block = (end - start) × scale pixels.
+    ────────────────────────────────────────────── */
+      function insertIdleBlocks(segments) {
+        // Add IDLE blocks wherever the CPU had nothing to run
+        const result = [];
+        let t = 0;
+        for (const seg of segments) {
+          if (seg.start > t) {
+            result.push({ pid: "IDLE", start: t, end: seg.start });
+          }
+          result.push({ ...seg });
+          t = seg.end;
+        }
+        return result;
+      }
+
+      function renderGantt(trackId, axisId, segments, colorMap) {
+        const track = document.getElementById(trackId);
+        const axis = document.getElementById(axisId);
+
+        const full = insertIdleBlocks(segments);
+        const totalTime = full[full.length - 1].end;
+
+        // Scale: pixels per time unit — fits screen width
+        const available = Math.min(window.innerWidth - 80, 1000);
+        const scale = Math.max(18, Math.min(54, available / totalTime));
+
+        // Build the colored blocks HTML
+        let html = "";
+        for (const seg of full) {
+          const width = (seg.end - seg.start) * scale;
+          const isIdle = seg.pid === "IDLE";
+          const bg = isIdle
+            ? ""
+            : `background: ${colorMap[seg.pid] || "#888"};`;
+          const label = width > 24 ? seg.pid : "";
+          const tip = `${seg.pid}: [${seg.start} – ${seg.end}] (${seg.end - seg.start} unit${seg.end - seg.start !== 1 ? "s" : ""})`;
+
+          html += `
+          <div class="g-block ${isIdle ? "idle" : ""}"
+               style="${bg} width: ${width}px;"
+               title="${tip}">
+            ${label}
+          </div>
+        `;
+        }
+
+        track.innerHTML = html;
+
+        // Build time axis ticks below the chart
+        const interval = totalTime <= 15 ? 1 : totalTime <= 40 ? 2 : 5;
+        let ticks = "";
+        const appendTick = (time) => {
+          const left = time * scale;
+          const transform =
+            time === 0
+              ? "transform:none;"
+              : time === totalTime
+                ? "transform:translateX(-100%);"
+                : "";
+          ticks += `<span class="g-tick" style="left:${left}px; ${transform}">${time}</span>`;
+        };
+
+        for (let t = 0; t <= totalTime; t += interval) {
+          appendTick(t);
+        }
+        // Always show the final tick if the interval doesn't land exactly on totalTime
+        if (totalTime % interval !== 0) {
+          appendTick(totalTime);
+        }
+
+        axis.innerHTML = ticks;
+        axis.style.minWidth = (totalTime + 2) * scale + "px";
+      }
+
+      /* ──────────────────────────────────────────────
+       RESULTS TABLE RENDERING
+       Builds WT / TAT / RT table with an averages row.
+       Returns averages object for the comparison section.
+    ────────────────────────────────────────────── */
+      function renderResultsTable(containerId, metrics, colorMap, isSRTF) {
+        const avgs = calcAverages(metrics);
+
+        let html = `
+        <table class="res-table">
+          <thead>
+            <tr>
+              <th>Process</th>
+              <th>Arrival</th>
+              <th>Burst</th>
+              <th>Priority</th>
+              <th>Completion</th>
+              <th>TAT</th>
+              <th>WT</th>
+              <th>RT</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+        metrics.forEach((m) => {
+          const color = colorMap[m.id] || "#888";
+          html += `
+          <tr>
+            <td>
+              <span class="dot" style="background:${color};"></span>
+              ${m.id}
+            </td>
+            <td>${m.arrival}</td>
+            <td>${m.burst}</td>
+            <td>${m.priority}</td>
+            <td>${m.ct}</td>
+            <td>${m.tat}</td>
+            <td>${m.wt}</td>
+            <td>${m.rt}</td>
+          </tr>
+        `;
+        });
+
+        // Averages row
+        const avgClass = isSRTF ? "avg-row srtf" : "avg-row";
+        html += `
+        <tr class="${avgClass}">
+          <td colspan="5" style="text-align:right;">Averages →</td>
+          <td>${avgs.tat}</td>
+          <td>${avgs.wt}</td>
+          <td>${avgs.rt}</td>
+        </tr>
+        </tbody>
+        </table>
+      `;
+
+        document.getElementById(containerId).innerHTML = html;
+        return avgs;
+      }
+
+      /* ──────────────────────────────────────────────
+       COMPARISON SUMMARY — metric cards + comparison rows
+    ────────────────────────────────────────────── */
+      function renderComparison(priAvgs, srtfAvgs) {
+        // ── 3 metric cards (Avg WT, Avg TAT, Avg RT) ──
+        const metrics = [
+          { label: "Avg Waiting Time", pri: priAvgs.wt, srtf: srtfAvgs.wt },
+          {
+            label: "Avg Turnaround Time",
+            pri: priAvgs.tat,
+            srtf: srtfAvgs.tat,
+          },
+          { label: "Avg Response Time", pri: priAvgs.rt, srtf: srtfAvgs.rt },
+        ];
+
+        let cardsHtml = "";
+        metrics.forEach((m) => {
+          const tie = Math.abs(m.pri - m.srtf) < 0.001;
+          const priCls = tie ? "tie" : m.pri <= m.srtf ? "win" : "lose";
+          const srtfCls = tie ? "tie" : m.srtf < m.pri ? "win" : "lose";
+
+          cardsHtml += `
+          <div class="m-card">
+            <div class="m-lbl">${m.label}</div>
+            <div class="m-vals">
+              <div class="m-val">
+                <span class="m-name" style="color:var(--blue);">Priority</span>
+                <span class="m-num ${priCls}">${m.pri.toFixed(2)}</span>
+              </div>
+              <div class="m-val">
+                <span class="m-name" style="color:var(--teal);">SRTF</span>
+                <span class="m-num ${srtfCls}">${m.srtf.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+        });
+
+        document.getElementById("metric-cards").innerHTML = cardsHtml;
+
+        // ── Comparison detail rows ──
+        // Covers all required comparison focus areas from the C1 handout:
+        // • Short job with low priority  • Long high-priority vs short jobs
+        // • Fairness vs efficiency       • Starvation risk
+        const rows = [
+          {
+            lbl: "Avg Waiting Time",
+            pv: priAvgs.wt.toFixed(2),
+            sv: srtfAvgs.wt.toFixed(2),
+            priWins: priAvgs.wt <= srtfAvgs.wt + 0.001,
+          },
+          {
+            lbl: "Avg Turnaround Time",
+            pv: priAvgs.tat.toFixed(2),
+            sv: srtfAvgs.tat.toFixed(2),
+            priWins: priAvgs.tat <= srtfAvgs.tat + 0.001,
+          },
+          {
+            lbl: "Avg Response Time",
+            pv: priAvgs.rt.toFixed(2),
+            sv: srtfAvgs.rt.toFixed(2),
+            priWins: priAvgs.rt <= srtfAvgs.rt + 0.001,
+          },
+          {
+            lbl: "Selection Rule",
+            pv: "Lowest priority number",
+            sv: "Shortest remaining time",
+            sp: true,
+            neutral: true,
+          },
+          {
+            lbl: "Short Job with Low Priority",
+            pv: "Delayed (priority ignored)",
+            sv: "Runs immediately (shortest)",
+            sp: true,
+            priLose: true,
+          },
+          {
+            lbl: "Long Job with High Priority",
+            pv: "Runs fully first",
+            sv: "Preempted by shorter arrivals",
+            sp: true,
+            priWin: true,
+          },
+          {
+            lbl: "Starvation Risk",
+            pv: "Low-priority processes",
+            sv: "Long-burst processes",
+            sp: true,
+            warnBoth: true,
+          },
+          {
+            lbl: "Urgency Support",
+            pv: "Yes — priority-based",
+            sv: "None — ignores priority",
+            sp: true,
+            priWin: true,
+          },
+          {
+            lbl: "Optimal Avg WT",
+            pv: "Not optimal",
+            sv: "Provably optimal",
+            sp: true,
+            srtfWin: true,
+          },
+        ];
+
+        let rowsHtml = "";
+        rows.forEach((row) => {
+          let priChip, srtfChip;
+
+          if (!row.sp) {
+            // Numeric comparison rows
+            priChip = row.priWins ? "win" : "lose";
+            srtfChip = row.priWins ? "lose" : "win";
+          } else if (row.neutral) {
+            priChip = "info";
+            srtfChip = "teal";
+          } else if (row.warnBoth) {
+            priChip = "warn";
+            srtfChip = "warn";
+          } else if (row.priLose) {
+            priChip = "lose";
+            srtfChip = "win";
+          } else if (row.priWin) {
+            priChip = "win";
+            srtfChip = "lose";
+          } else if (row.srtfWin) {
+            priChip = "lose";
+            srtfChip = "win";
+          } else {
+            priChip = "info";
+            srtfChip = "teal";
+          }
+
+          rowsHtml += `
+          <div class="cmp-row">
+            <div class="chip ${priChip}">${row.pv}</div>
+            <div class="cmp-lbl">${row.lbl}</div>
+            <div class="chip ${srtfChip}">${row.sv}</div>
+          </div>
+        `;
+        });
+
+        document.getElementById("cmp-rows").innerHTML = rowsHtml;
+      }
+
+      /* ──────────────────────────────────────────────
+       ANALYSIS QUESTIONS
+       Exactly 5 questions as required by C1 handout:
+       1. Lower average waiting time?
+       2. Lower average response time?
+       3. Did priority values improve urgent-process treatment?
+       4. Did SRTF favor short jobs more aggressively?
+       5. Which algorithm would you recommend, and why?
+    ────────────────────────────────────────────── */
+      function renderAnalysis(priAvgs, srtfAvgs) {
+        const priWinsWT = priAvgs.wt <= srtfAvgs.wt + 0.001;
+        const priWinsRT = priAvgs.rt <= srtfAvgs.rt + 0.001;
+        const priWinsTAT = priAvgs.tat <= srtfAvgs.tat + 0.001;
+
+        const questions = [
+          // Q1 — required: which produced lower average waiting time?
+          {
+            q: "Q1. Which algorithm produced the lower average waiting time?",
+            a: priWinsWT
+              ? `Priority Scheduling produced the lower average WT (<strong>${priAvgs.wt.toFixed(2)}</strong> vs SRTF: <strong>${srtfAvgs.wt.toFixed(2)}</strong>). On this particular workload, serving high-priority processes early reduced overall waiting. Note that this is not the general case — SRTF is theoretically optimal for average waiting time across all workloads.`
+              : `SRTF produced the lower average WT (<strong>${srtfAvgs.wt.toFixed(2)}</strong> vs Priority: <strong>${priAvgs.wt.toFixed(2)}</strong>). This is consistent with SRTF's theoretical property — it is provably optimal for minimizing average waiting time by always selecting the process with the shortest remaining burst, which minimizes the time other processes spend waiting behind it.`,
+          },
+
+          // Q2 — required: which produced lower average response time?
+          {
+            q: "Q2. Which algorithm produced the lower average response time?",
+            a: priWinsRT
+              ? `Priority Scheduling produced the lower average RT (<strong>${priAvgs.rt.toFixed(2)}</strong> vs SRTF: <strong>${srtfAvgs.rt.toFixed(2)}</strong>). High-priority processes received CPU access almost immediately upon arrival, pulling the average down significantly — though low-priority processes may have waited much longer for their first CPU access.`
+              : `SRTF produced the lower average RT (<strong>${srtfAvgs.rt.toFixed(2)}</strong> vs Priority: <strong>${priAvgs.rt.toFixed(2)}</strong>). Because SRTF always chooses the shortest remaining job, short processes received their first CPU access very quickly, which reduced the average response time across the entire process set.`,
+          },
+
+          // Q3 — required: did priority values improve treatment of urgent processes?
+          {
+            q: "Q3. Did priority values improve the treatment of urgent processes?",
+            a: `Yes. Under Priority Scheduling, processes with a lower priority number were always selected first among all ready processes and could immediately preempt a currently running lower-priority process. This guaranteed that urgent, high-priority work was never delayed behind less important tasks. Under SRTF, priority values are completely ignored — a process with priority=1 and a long burst will be preempted by a newly arrived short-burst process regardless of how critical it is. The behavior is clearly visible in Scenario B, where Priority Scheduling ran P1 (priority=1, burst=12) without interruption, while SRTF immediately preempted it when the shorter P2 arrived.`,
+          },
+
+          // Q4 — required: did SRTF favor short jobs more aggressively?
+          {
+            q: "Q4. Did SRTF favor short jobs more aggressively?",
+            a: `Yes. SRTF is inherently aggressive in favoring short jobs. At every point in time, it selects the process with the shortest remaining burst and immediately preempts the current process the moment a shorter one arrives — without considering priority, arrival order, or how long other processes have been waiting. This aggressive behavior toward short jobs is why SRTF achieves optimal average waiting time but can cause long-burst processes to wait excessively (starvation-like behavior) when short processes keep arriving continuously. In Scenario C, P4 (burst=8) experienced significantly higher waiting time compared to shorter processes under both algorithms, but especially under SRTF.`,
+          },
+
+          // Q5 — required: which algorithm would you recommend?
+          {
+            q: "Q5. Which algorithm would you recommend for the tested workload, and why?",
+            a: (() => {
+              const wins = [priWinsWT, priWinsTAT, priWinsRT].filter(
+                Boolean,
+              ).length;
+              if (wins >= 2) {
+                return `<strong>Priority Scheduling</strong> is recommended for this workload. It outperformed SRTF on ${wins} of 3 average metrics and correctly served urgent processes with appropriate speed. It is best suited for systems where processes have genuinely different levels of importance — such as real-time, operating system, or mixed-criticality environments — provided an aging mechanism is implemented to prevent low-priority starvation.`;
+              } else {
+                return `<strong>SRTF</strong> is recommended for this workload. It outperformed Priority Scheduling on ${3 - wins} of 3 average metrics. SRTF minimizes average waiting time by design, making it the better choice for batch processing or throughput-focused environments where all processes are treated equally and the primary goal is to minimize overall wait. It should not be used in systems with genuine urgency requirements, since it ignores priority entirely.`;
+              }
+            })(),
+          },
+        ];
+
+        const html = questions
+          .map(
+            (qa) => `
+        <div class="qa-item">
+          <div class="qa-q">${qa.q}</div>
+          <div class="qa-a">${qa.a}</div>
+        </div>
+      `,
+          )
+          .join("");
+
+        document.getElementById("qa-list").innerHTML = html;
+      }
+
+      /* ──────────────────────────────────────────────
+       FINAL CONCLUSION — exactly 4 points as required by C1 handout:
+       1. Which algorithm performed better on the selected datasets?
+       2. Which metrics were better under each algorithm?
+       3. Identify the main trade-off observed.
+       4. Which algorithm appeared fairer in practice?
+    ────────────────────────────────────────────── */
+      function renderConclusion(priAvgs, srtfAvgs) {
+        const priWinsWT = priAvgs.wt <= srtfAvgs.wt + 0.001;
+        const priWinsTAT = priAvgs.tat <= srtfAvgs.tat + 0.001;
+        const priWinsRT = priAvgs.rt <= srtfAvgs.rt + 0.001;
+        const wins = [priWinsWT, priWinsTAT, priWinsRT].filter(Boolean).length;
+        const overall = wins >= 2 ? "Priority Scheduling" : "SRTF";
+
+        document.getElementById("conclusion").innerHTML = `
+
+        <div class="conc-pt">
+          <div class="conc-lbl">1 — Which algorithm performed better on the selected datasets</div>
+          <div class="conc-txt">
+            <strong>${overall}</strong> delivered better overall performance, winning
+            ${wins >= 2 ? wins : 3 - wins} out of 3 average metric comparisons on this workload.<br>
+            Avg WT  → Priority: <strong>${priAvgs.wt.toFixed(2)}</strong>,  SRTF: <strong>${srtfAvgs.wt.toFixed(2)}</strong>
+            (winner: ${priWinsWT ? "Priority" : "SRTF"}).<br>
+            Avg TAT → Priority: <strong>${priAvgs.tat.toFixed(2)}</strong>, SRTF: <strong>${srtfAvgs.tat.toFixed(2)}</strong>
+            (winner: ${priWinsTAT ? "Priority" : "SRTF"}).<br>
+            Avg RT  → Priority: <strong>${priAvgs.rt.toFixed(2)}</strong>,  SRTF: <strong>${srtfAvgs.rt.toFixed(2)}</strong>
+            (winner: ${priWinsRT ? "Priority" : "SRTF"}).
+          </div>
+        </div>
+
+        <div class="conc-pt">
+          <div class="conc-lbl">2 — Which metrics were better under each algorithm</div>
+          <div class="conc-txt">
+            <strong>Priority Scheduling was better at:</strong>
+            serving urgent processes — high-priority processes received CPU access immediately
+            and could preempt lower-priority ones at any time. This produced faster response
+            times for critical work and ensured that important tasks were never blocked by
+            less urgent ones. On workloads where high-priority processes also have short
+            bursts, Priority can also improve waiting time.<br><br>
+            <strong>SRTF was better at:</strong>
+            minimizing overall average waiting time and turnaround time across all processes.
+            Because SRTF always picks the shortest remaining job, it reduces the time that
+            processes spend waiting behind other work. SRTF is provably optimal for average
+            waiting time — no other algorithm can achieve a lower average WT on the same
+            workload.
+          </div>
+        </div>
+
+        <div class="conc-pt">
+          <div class="conc-lbl">3 — Main trade-off observed</div>
+          <div class="conc-txt">
+            The fundamental trade-off is <strong>policy-driven service (Priority) versus
+            efficiency-driven service (SRTF)</strong>.
+            Priority Scheduling assigns CPU time based on declared importance — urgent tasks
+            are guaranteed fast access, but a long high-priority process can block many
+            short lower-priority processes, which may waste CPU time.
+            SRTF assigns CPU time based purely on burst length — it maximizes throughput and
+            minimizes average waiting time, but it completely ignores urgency and can
+            indefinitely delay long-burst processes when short ones keep arriving.
+            The choice between them depends on whether the system needs
+            <em>urgency awareness</em> or <em>time efficiency</em>.
+          </div>
+        </div>
+
+        <div class="conc-pt">
+          <div class="conc-lbl">4 — Which algorithm appeared fairer in practice</div>
+          <div class="conc-txt">
+            Neither algorithm is universally fair, but they are unfair in different ways.
+            <strong>Priority Scheduling</strong> is unfair to low-priority processes — they
+            risk being indefinitely bypassed (starvation) if higher-priority processes keep
+            arriving. The standard mitigation is an <em>aging mechanism</em> that gradually
+            raises the priority of long-waiting processes.<br>
+            <strong>SRTF</strong> is unfair to long-burst processes — they are repeatedly
+            preempted by shorter arrivals and can wait far longer than short processes,
+            with no built-in protection mechanism.<br>
+            In practice, <strong>Priority Scheduling with aging</strong> is considered the
+            fairer option in most real-world systems because it respects human-assigned
+            importance while providing a mechanism (aging) to guarantee eventual service
+            for all processes — whereas SRTF has no inherent protection for long-burst
+            processes at all.
+          </div>
+        </div>
+      `;
+      }
+
+      /* ══════════════════════════════════════════════
+       MAIN — RUN SIMULATION
+       Validates input, runs both algorithms on the same
+       workload, and renders all results sections.
+    ══════════════════════════════════════════════ */
+      function runSimulation() {
+        // Need at least 2 processes
+        if (processList.length < 2) {
+          alert(
+            "Please add at least 2 processes before running the simulation.",
+          );
+          return;
+        }
+
+        const colorMap = buildColorMap();
+
+        // Run Priority Scheduling on the process list
+        const priResult = runPriority(processList);
+        const priMetrics = calcMetrics(priResult.processes);
+
+        // Run SRTF on the SAME process list
+        const srtfResult = runSRTF(processList);
+        const srtfMetrics = calcMetrics(srtfResult.processes);
+
+        // Draw Gantt Charts
+        renderGantt("gantt-pri", "axis-pri", priResult.ganttSegments, colorMap);
+        renderGantt(
+          "gantt-srtf",
+          "axis-srtf",
+          srtfResult.ganttSegments,
+          colorMap,
+        );
+
+        // Draw Results Tables (returns averages)
+        const priAvgs = renderResultsTable(
+          "table-pri",
+          priMetrics,
+          colorMap,
+          false,
+        );
+        const srtfAvgs = renderResultsTable(
+          "table-srtf",
+          srtfMetrics,
+          colorMap,
+          true,
+        );
+
+        // Draw Comparison Summary
+        renderComparison(priAvgs, srtfAvgs);
+
+        // Write the 5 Analysis Questions
+        renderAnalysis(priAvgs, srtfAvgs);
+
+        // Write the 4-point Conclusion
+        renderConclusion(priAvgs, srtfAvgs);
+
+        // Reveal the results section
+        document.getElementById("results").classList.remove("hidden");
+
+        // Smooth scroll to results
+        setTimeout(() => {
+          document
+            .getElementById("results")
+            .scrollIntoView({ behavior: "smooth" });
+        }, 60);
+      }
+
+      /* ══════════════════════════════════════════════
+       PAGE INITIALISATION
+    ══════════════════════════════════════════════ */
+      document.getElementById("inp-pid").value = "P1";
+      renderProcessTable();
+    </script>
+  </body>
+</html>

@@ -30,11 +30,6 @@ This project is a CPU Scheduling Simulator that compares two preemptive scheduli
 - Scenario C: Starvation-sensitive case.
 - Scenario D: Validation case.
 
-## Team Members
-- Name 1 — ID
-- Name 2 — ID
-- Name 3 — ID
-
 ## Notes
 - No time quantum is used because this project compares Priority Scheduling and SRTF.
 - The same workload is used for both algorithms to ensure a fair comparison.

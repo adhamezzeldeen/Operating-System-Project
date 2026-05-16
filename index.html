@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>C1 — Priority vs SRTF Scheduling</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+
+    <div class="page-header">
+      <h1>
+        <span class="h-pri">Priority Scheduling</span>
+        <span class="h-vs">vs</span>
+        <span class="h-srtf">SRTF</span>
+      </h1>
+      <p>CS 241 — Operating Systems · Project C1 · CPU Scheduling Simulator</p>
+      <div class="header-pills">
+        <span class="hpill blue"
+          >Priority: lower number = higher priority · Preemptive · Tie-break:
+          arrival → ID</span
+        >
+        <span class="hpill teal"
+          >SRTF: shortest remaining time first · Preemptive · Tie-break: arrival
+          → ID</span
+        >
+      </div>
+    </div>
+
+    <div class="wrap">
+
+      <div class="sec">
+        <h2>Input Panel</h2>
+        <div class="line"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-lbl">Algorithm Rules</div>
+
+        <div class="rule-note">
+          <strong>Priority Scheduling (Preemptive):</strong>
+          The CPU always runs the available process with the lowest priority
+          number (1 = most urgent). A running process is interrupted immediately
+          when a higher-priority process arrives. Tie-break: earliest arrival
+          time first; if still tied, alphabetical Process ID.<br /><br />
+          <strong
+            >SRTF — Shortest Remaining Time First (Preemptive SJF):</strong
+          >
+          The CPU always runs the available process with the shortest remaining
+          burst time. A running process is preempted immediately when a newly
+          arrived process has a shorter remaining time. Tie-break: earliest
+          arrival time first; if still tied, alphabetical Process ID.
+        </div>
+
+        <div class="card-lbl">Add New Process</div>
+
+        <div class="fields-grid">
+          <div class="field-wrap">
+            <label>Process ID</label>
+            <input type="text" id="inp-pid" placeholder="P1" maxlength="8" />
+            <div class="err-msg" id="err-pid"></div>
+          </div>
+
+          <div class="field-wrap">
+            <label>Arrival Time ≥ 0</label>
+            <input type="number" id="inp-arrival" placeholder="0" min="0" />
+            <div class="err-msg" id="err-arrival"></div>
+          </div>
+
+          <div class="field-wrap">
+            <label>Burst Time ≥ 1</label>
+            <input type="number" id="inp-burst" placeholder="5" min="1" />
+            <div class="err-msg" id="err-burst"></div>
+          </div>
+
+          <div class="field-wrap">
+            <label>Priority Value (1 = highest)</label>
+            <input type="number" id="inp-priority" placeholder="1" min="1" />
+            <div class="err-msg" id="err-priority"></div>
+          </div>
+
+          <div
+            class="field-wrap"
+            style="justify-content: flex-end; padding-bottom: 18px"
+          >
+            <button class="btn-add" onclick="addProcess()">
+              + Add Process
+            </button>
+          </div>
+        </div>
+
+        <div
+          class="err-msg"
+          id="err-general"
+          style="font-size: 11px; margin-bottom: 4px"
+        ></div>
+      </div>
+
+      <div class="sec">
+        <h2>Test Scenarios</h2>
+        <div class="line"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-lbl">Scenarios A · B · C · D</div>
+
+        <div class="sc-bar">
+          <button class="btn-sc" id="sc-A" onclick="loadScenario('A')">
+            Scenario A — Basic Mixed
+          </button>
+          <button class="btn-sc" id="sc-B" onclick="loadScenario('B')">
+            Scenario B — Priority vs Burst Conflict
+          </button>
+          <button class="btn-sc" id="sc-C" onclick="loadScenario('C')">
+            Scenario C — Starvation Risk
+          </button>
+          <button class="btn-sc" id="sc-D" onclick="loadScenario('D')">
+            Scenario D — Validation
+          </button>
+          <button class="btn-clear" onclick="clearAll()">✕ Clear All</button>
+        </div>
+
+        <div class="sc-info" id="sc-info">
+          Select a scenario above or add processes manually using the Input
+          Panel.
+        </div>
+
+        <div class="val-demo hidden" id="val-demo">
+          <div class="val-demo-title">
+            ⚠ Scenario D — Validation: These Inputs Are Safely Rejected
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span
+            ><span class="val-f">Process ID (empty):</span><span>(blank)</span
+            ><span class="val-m"> → Required — cannot be empty</span>
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span><span class="val-f">Arrival Time:</span
+            ><span>-3</span
+            ><span class="val-m">
+              → Negative arrival not allowed — must be ≥ 0</span
+            >
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span><span class="val-f">Burst Time:</span
+            ><span>0</span
+            ><span class="val-m"> → Zero burst not allowed — must be ≥ 1</span>
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span
+            ><span class="val-f">Priority Value:</span><span>-1</span
+            ><span class="val-m">
+              → Negative priority not allowed — must be ≥ 1</span
+            >
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span><span class="val-f">Duplicate ID:</span
+            ><span>P1 (already exists)</span
+            ><span class="val-m"> → Duplicate Process ID not allowed</span>
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span><span class="val-f">Non-numeric:</span
+            ><span>"abc" in Burst</span
+            ><span class="val-m"> → Must be a number</span>
+          </div>
+          <div class="val-row">
+            <span class="val-x">✕</span><span class="val-f">Missing field:</span
+            ><span>(all blank)</span
+            ><span class="val-m"> → All fields are required</span>
+          </div>
+          <div class="val-row" style="margin-top: 8px">
+            <span class="val-ok">✓</span>
+            <span style="color: var(--green); font-weight: 600">
+              All invalid inputs are rejected. Valid workload loaded —
+              simulation can proceed.</span
+            >
+          </div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h2>Process Table</h2>
+        <div class="line"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-lbl">
+          Current Process Set — same workload used for both algorithms
+        </div>
+        <div id="process-table">
+          <div class="empty-state">
+            No processes yet. Add processes above or load a scenario.
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-run" onclick="runSimulation()">
+        ▶ Run Simulation — Priority Scheduling &amp; SRTF
+      </button>
+
+      <div id="results" class="hidden">
+
+        <div class="sec">
+          <h2>Gantt Chart for Priority</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl">
+            Priority Scheduling — Preemptive — lower number = higher priority
+          </div>
+          <div class="gantt-scroll">
+            <div class="gantt-track" id="gantt-pri"></div>
+            <div class="gantt-axis" id="axis-pri"></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>Results Table for Priority</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl">
+            Per-Process WT · TAT · RT + Averages — Priority Scheduling
+          </div>
+          <div id="table-pri"></div>
+        </div>
+
+        <div class="sec">
+          <h2>Gantt Chart for SRTF</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl teal">
+            SRTF — Shortest Remaining Time First — Preemptive SJF
+          </div>
+          <div class="gantt-scroll">
+            <div class="gantt-track" id="gantt-srtf"></div>
+            <div class="gantt-axis" id="axis-srtf"></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>Results Table for SRTF</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl teal">
+            Per-Process WT · TAT · RT + Averages — SRTF
+          </div>
+          <div id="table-srtf"></div>
+        </div>
+
+        <div class="sec">
+          <h2>Comparison Summary Section</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl green">
+            Average Metrics — Priority vs SRTF on Same Workload
+          </div>
+
+          <div class="metric-cards" id="metric-cards"></div>
+
+          <div class="card-lbl green" style="margin-top: 8px">
+            Comparison Details — Behavior &amp; Trade-offs
+          </div>
+          <div id="cmp-rows"></div>
+        </div>
+
+        <div class="sec">
+          <h2>Analysis Questions</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl">
+            Required Analysis — 5 Questions (C1 Handout)
+          </div>
+          <div class="qa-list" id="qa-list"></div>
+        </div>
+
+        <div class="sec">
+          <h2>Final Conclusion Area</h2>
+          <div class="line"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-lbl green">
+            Final Conclusion — 4 Required Points (C1 Handout)
+          </div>
+          <div class="conclusion" id="conclusion"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>

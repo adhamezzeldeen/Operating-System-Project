@@ -13,16 +13,16 @@ This project is a CPU Scheduling Simulator that compares two preemptive scheduli
 - Show comparison summary, analysis answers, and final conclusion.
 
 ## How to Run
-1. Open `os-project.html` in a web browser.
+1. Open `index.html` in a web browser.
 2. Add processes manually or load one of the preset scenarios.
 3. Click `Run Simulation`.
 4. View the Gantt charts, results tables, comparison summary, analysis answers, and conclusion.
 
 ## Repository Contents
-- `os-project.html` — main simulator file.
+- `index.html` — main simulator file.
 - `README.md` — project overview and instructions.
 - `Documentation-draft.docx` — documentation with screenshots.
-- `test-cases.md` — short description of the test scenarios.
+- `test-cases.docx` — short description of the test scenarios.
 
 ## Test Scenarios
 - Scenario A: Basic mixed workload.
